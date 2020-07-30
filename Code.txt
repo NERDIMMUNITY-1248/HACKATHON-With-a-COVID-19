@@ -1,0 +1,459 @@
+# Code to find initial number of infected people entered India post lockdown
+import pandas as pd
+from numpy.random import choice
+import random
+random.seed(10)
+past = pd.DataFrame(pd.read_csv("Passengers.csv"))
+print(past)
+initial = pd.DataFrame()
+
+airports = list(past["Airports"])
+print(airports)
+weigh = list(past["Weights"])
+print(weigh)
+initial["Airport"] = choice(airports, 1500000, p=weigh)
+
+
+outbound = ["UAE",
+            "Singapore",
+            "Saudi Arabia",
+            "Thailand",
+            "Malaysia",
+            "Qatar",
+            "UK",
+            "USA",
+            "Oman",
+            "Sri Lanka",
+            "Hong Kong"
+            ]
+weigh_outbound = [0.486891386,
+                  0.093632959,
+                  0.074906367,
+                  0.056179775,
+                  0.056179775,
+                  0.046816479,
+                  0.043071161,
+                  0.043071161,
+                  0.043071161,
+                  0.033707865,
+                  0.02247191
+                  ]
+initial["Country"] = choice(outbound, 1500000, p=weigh_outbound)
+df = pd.DataFrame()
+df["count"] = initial.groupby(["Airport", "Country"]).size()
+df.to_csv("initial data.csv")
+df = pd.read_csv("initial data.csv")
+print(df)
+print(len(df))
+df["infected"] = " "
+for i in range(0, len(df)):
+    if df.iloc[i, 1] == "UAE":
+        df.iloc[i, 3] = df.iloc[i, 2] * 0.005616514
+    elif df.iloc[i, 1] == "Singapore":
+        df.iloc[i, 3] = df.iloc[i, 2] * 0.007968156
+    elif df.iloc[i, 1] == "Saudi Arabia":
+        df.iloc[i, 3] = df.iloc[i, 2] * 0.006827176
+    elif df.iloc[i, 1] == "Thailand":
+        df.iloc[i, 3] = df.iloc[i, 2] * 0.00005
+    elif df.iloc[i, 1] == "Malaysia":
+        df.iloc[i, 3] = df.iloc[i, 2] * 0.000269577
+    elif df.iloc[i, 1] == "Qatar":
+        df.iloc[i, 3] = df.iloc[i, 2] * 0.037229437
+    elif df.iloc[i, 1] == "UK":
+        df.iloc[i, 3] = df.iloc[i, 2] * 0.004291229
+    elif df.iloc[i, 1] == "USA":
+        df.iloc[i, 3] = df.iloc[i, 2] * 0.010707731
+    elif df.iloc[i, 1] == "Oman":
+        df.iloc[i, 3] = df.iloc[i, 2] * 0.011656552
+    elif df.iloc[i, 1] == "Sri Lanka":
+        df.iloc[i, 3] = df.iloc[i, 2] * 0.000124435
+    elif df.iloc[i, 1] == "Hong Kong":
+        df.iloc[i, 3] = df.iloc[i, 2] * 0.000209355
+print(df)
+df.to_csv("initial data.csv")
+ # ...................End..............................
+
+# SIR model to predict number on infected in each state.
+# Code was run for different infection and recovery rate, population depending on state.
+import numpy as np
+from scipy.integrate import odeint
+import matplotlib.pyplot as plt
+import pandas as pd
+# Total population, N.
+N = 690251
+# Initial number of infected and recovered individuals, I0 and R0.
+I0, R0 = 54, 0
+# Everyone else, S0, is susceptible to infection initially.
+S0 = N - I0 - R0
+# Contact rate, beta, and mean recovery rate, gamma, (in 1/days).
+beta, gamma = 1/14, 1/14
+beta2 =beta/3
+# A grid of time points (in days)
+t1 = np.linspace(0, 34, 34)
+# The SIR model differential equations.
+def deriv(y, t, N, beta, gamma):
+    S, I, R = y
+    dSdt = -beta * S * I / N
+    dIdt = beta * S * I / N - gamma * I
+    dRdt = gamma * I
+    return dSdt, dIdt, dRdt
+
+# Initial conditions vector
+y0 = S0, I0, R0
+# Integrate the SIR equations over the time grid, t.
+ret = odeint(deriv, y0, t1, args=(N, beta, gamma))
+S1, I1, R1 = ret.T
+S_lock, I_lock, R_lock = ret[33].T
+
+beta, gamma = 0.5/14, 0.25/14
+# A grid of time points (in days)
+t2 = np.linspace(34, 121, 87)
+# Initial conditions vector
+y0 = S_lock,I_lock,R_lock
+# Integrate the SIR equations over the time grid, t.
+ret = odeint(deriv, y0, t2, args=(N, beta, gamma))
+S2, I2, R2 = ret.T
+S_Unlock, I_Unlock, R_Unlock = ret[86].T
+
+beta, gamma = .2/14, 2/14
+# A grid of time points (in days)
+t3 = np.linspace(121, 470, 349)
+# Initial conditions vector
+y0 = S_Unlock, I_Unlock, R_Unlock
+# Integrate the SIR equations over the time grid, t.
+ret = odeint(deriv, y0, t3, args=(N, beta, gamma))
+S3, I3, R3 = ret.T
+
+
+
+S, I, R = np.concatenate((S1,S2,S3)), np.concatenate((I1,I2,I3)),np.concatenate((R1,R2,R3))
+t = np.concatenate((t1, t2, t3))
+Cumul = I + R
+# Plot the data on three separate curves for S(t), I(t) and R(t)
+Delhi = pd.DataFrame((S, I, R, Cumul)).T
+Delhi.to_csv("SIR.csv")
+
+
+fig = plt.figure(facecolor='w')
+ax = fig.add_subplot(111, facecolor='#dddddd', axisbelow=True)
+ax.plot(t, S/N, 'b', alpha=0.5, lw=2, label='Susceptible')
+ax.plot(t, I/N, 'r', alpha=0.5, lw=2, label='Infected')
+ax.plot(t, R/N, 'g', alpha=0.5, lw=2, label='Recovered with immunity')
+ax.plot(t, Cumul/N, 'y', alpha=0.5, lw=2, label='Infected cumulative')
+ax.set_xlabel('Time /days')
+ax.set_ylabel('Number (1000s)')
+ax.set_ylim(0,1.2)
+ax.yaxis.set_tick_params(length=0)
+ax.xaxis.set_tick_params(length=0)
+ax.grid(b=True, which='major', c='w', lw=2, ls='-')
+legend = ax.legend()
+legend.get_frame().set_alpha(0.5)
+for spine in ('top', 'right', 'bottom', 'left'):
+    ax.spines[spine].set_visible(False)
+plt.show()
+# ..........................End...................................
+
+# Model to find daily corona positives in each state
+import numpy as np
+import pandas as pd
+from sklearn import linear_model
+Data = pd.DataFrame(pd.read_csv("all_data.csv"))
+Data_P = pd.DataFrame(pd.read_csv("Predict.csv"))
+S = pd.DataFrame()
+# print(Data)
+
+X = Data[['Andaman and Nicobar Islands_dt', 'Andaman and Nicobar Islands_In']]
+Y = Data['Andaman and Nicobar Islands_dp']
+regr_AndamanandNicobarIslands = linear_model.LinearRegression()
+regr_AndamanandNicobarIslands.fit(X, Y)
+print(regr_AndamanandNicobarIslands.coef_)
+print(regr_AndamanandNicobarIslands.intercept_)
+X_P = Data_P[['Andaman and Nicobar Islands_dt', 'Andaman and Nicobar Islands_In']]
+S['Andaman and Nicobar Islands'] = regr_AndamanandNicobarIslands.predict(Data_P[['Andaman and Nicobar Islands_dt', 'Andaman and Nicobar Islands_In']])
+
+X = Data[['Andhra Pradesh_dt', 'Andhra Pradesh_In']]
+Y = Data['Andhra Pradesh_dp']
+regr_AndhraPradesh = linear_model.LinearRegression()
+regr_AndhraPradesh.fit(X, Y)
+print(regr_AndhraPradesh.coef_)
+print(regr_AndhraPradesh.intercept_)
+X_P = Data_P[['Andhra Pradesh_dt', 'Andhra Pradesh_In']]
+S['Andhra Pradesh'] = regr_AndhraPradesh.predict(Data_P[['Andhra Pradesh_dt', 'Andhra Pradesh_In']])
+
+X = Data[['Arunachal Pradesh_dt', 'Arunachal Pradesh_In']]
+Y = Data['Arunachal Pradesh_dp']
+regr_ArunachalPradesh = linear_model.LinearRegression()
+regr_ArunachalPradesh.fit(X, Y)
+print(regr_ArunachalPradesh.coef_)
+print(regr_ArunachalPradesh.intercept_)
+X_P = Data_P[['Arunachal Pradesh_dt', 'Arunachal Pradesh_In']]
+S['Arunachal Pradesh'] = regr_ArunachalPradesh.predict(Data_P[['Arunachal Pradesh_dt', 'Arunachal Pradesh_In']])
+
+X = Data[['Assam_dt', 'Assam_In']]
+Y = Data['Assam_dp']
+regr_Assam = linear_model.LinearRegression()
+regr_Assam.fit(X, Y)
+print(regr_Assam.coef_)
+print(regr_Assam.intercept_)
+X_P = Data_P[['Assam_dt', 'Assam_In']]
+S['Assam'] = regr_Assam.predict(Data_P[['Assam_dt', 'Assam_In']])
+
+X = Data[['Bihar_dt', 'Bihar_In']]
+Y = Data['Bihar_dp']
+regr_Bihar = linear_model.LinearRegression()
+regr_Bihar.fit(X, Y)
+print(regr_Bihar.coef_)
+print(regr_Bihar.intercept_)
+X_P = Data_P[['Bihar_dt', 'Bihar_In']]
+S['Bihar'] = regr_Bihar.predict(Data_P[['Bihar_dt', 'Bihar_In']])
+
+X = Data[['Chandigarh_dt', 'Chandigarh_In']]
+Y = Data['Chandigarh_dp']
+regr_Chandigarh = linear_model.LinearRegression()
+regr_Chandigarh.fit(X, Y)
+print(regr_Chandigarh.coef_)
+print(regr_Chandigarh.intercept_)
+X_P = Data_P[['Chandigarh_dt', 'Chandigarh_In']]
+S['Chandigarh'] = regr_Chandigarh.predict(Data_P[['Chandigarh_dt', 'Chandigarh_In']])
+
+X = Data[['Chhattisgarh_dt', 'Chhattisgarh_In']]
+Y = Data['Chhattisgarh_dp']
+regr_Chhattisgarh = linear_model.LinearRegression()
+regr_Chhattisgarh.fit(X, Y)
+print(regr_Chhattisgarh.coef_)
+print(regr_Chhattisgarh.intercept_)
+X_P = Data_P[['Chhattisgarh_dt', 'Chhattisgarh_In']]
+S['Chhattisgarh'] = regr_Chhattisgarh.predict(Data_P[['Chhattisgarh_dt', 'Chhattisgarh_In']])
+
+X = Data[['Dadra and Nagar Haveli and Daman and Diu_dt', 'Dadra and Nagar Haveli and Daman and Diu_In']]
+Y = Data['Dadra and Nagar Haveli and Daman and Diu_dp']
+regr_DadraandNagarHaveliandDamanandDiu = linear_model.LinearRegression()
+regr_DadraandNagarHaveliandDamanandDiu.fit(X, Y)
+print(regr_DadraandNagarHaveliandDamanandDiu.coef_)
+print(regr_DadraandNagarHaveliandDamanandDiu.intercept_)
+X_P = Data_P[['Dadra and Nagar Haveli and Daman and Diu_dt', 'Dadra and Nagar Haveli and Daman and Diu_In']]
+S['Dadra and Nagar Haveli and Daman and Diu'] = regr_DadraandNagarHaveliandDamanandDiu.predict(Data_P[['Dadra and Nagar Haveli and Daman and Diu_dt', 'Dadra and Nagar Haveli and Daman and Diu_In']])
+
+X = Data[['Delhi_dt', 'Delhi_In']]
+Y = Data['Delhi_dp']
+regr_Delhi = linear_model.LinearRegression()
+regr_Delhi.fit(X, Y)
+print(regr_Delhi.coef_)
+print(regr_Delhi.intercept_)
+X_P = Data_P[['Delhi_dt', 'Delhi_In']]
+S['Delhi'] = regr_Delhi.predict(Data_P[['Delhi_dt', 'Delhi_In']])
+
+X = Data[['Goa_dt', 'Goa_In']]
+Y = Data['Goa_dp']
+regr_Goa = linear_model.LinearRegression()
+regr_Goa.fit(X, Y)
+print(regr_Goa.coef_)
+print(regr_Goa.intercept_)
+S['Goa'] = regr_Goa.predict(Data_P[['Goa_dt', 'Goa_In']])
+
+X = Data[['Gujarat_dt', 'Gujarat_In']]
+Y = Data['Gujarat_dp']
+regr_Gujarat = linear_model.LinearRegression()
+regr_Gujarat.fit(X, Y)
+print(regr_Gujarat.coef_)
+print(regr_Gujarat.intercept_)
+S['Gujarat'] = regr_Gujarat.predict(Data_P[['Gujarat_dt', 'Gujarat_In']])
+
+X = Data[['Haryana_dt', 'Haryana_In']]
+Y = Data['Haryana_dp']
+regr_Haryana = linear_model.LinearRegression()
+regr_Haryana.fit(X, Y)
+print(regr_Haryana.coef_)
+print(regr_Haryana.intercept_)
+S['Haryana'] = regr_Haryana.predict(Data_P[['Haryana_dt', 'Haryana_In']])
+
+X = Data[['Himachal Pradesh_dt', 'Himachal Pradesh_In']]
+Y = Data['Himachal Pradesh_dp']
+regr_HimachalPradesh = linear_model.LinearRegression()
+regr_HimachalPradesh.fit(X, Y)
+print(regr_HimachalPradesh.coef_)
+print(regr_HimachalPradesh.intercept_)
+S['Himachal Pradesh'] = regr_HimachalPradesh.predict(Data_P[['Himachal Pradesh_dt', 'Himachal Pradesh_In']])
+
+X = Data[['Jammu and Kashmir_dt', 'Jammu and Kashmir_In']]
+Y = Data['Jammu and Kashmir_dp']
+regr_JammuandKashmir = linear_model.LinearRegression()
+regr_JammuandKashmir.fit(X, Y)
+print(regr_JammuandKashmir.coef_)
+print(regr_JammuandKashmir.intercept_)
+S['Jammu and Kashmir'] = regr_JammuandKashmir.predict(Data_P[['Jammu and Kashmir_dt', 'Jammu and Kashmir_In']])
+
+X = Data[['Jharkhand_dt', 'Jharkhand_In']]
+Y = Data['Jharkhand_dp']
+regr_Jharkhand = linear_model.LinearRegression()
+regr_Jharkhand.fit(X, Y)
+print(regr_Jharkhand.coef_)
+print(regr_Jharkhand.intercept_)
+S['Jharkhand'] = regr_Jharkhand.predict(Data_P[['Jharkhand_dt', 'Jharkhand_In']])
+
+X = Data[['Karnataka_dt', 'Karnataka_In']]
+Y = Data['Karnataka_dp']
+regr_Karnataka = linear_model.LinearRegression()
+regr_Karnataka.fit(X, Y)
+print(regr_Karnataka.coef_)
+print(regr_Karnataka.intercept_)
+S['Karnataka'] = regr_Karnataka.predict(Data_P[['Karnataka_dt', 'Karnataka_In']])
+
+X = Data[['Kerala_dt', 'Kerala_In']]
+Y = Data['Kerala_dp']
+regr_Kerala = linear_model.LinearRegression()
+regr_Kerala.fit(X, Y)
+print(regr_Kerala.coef_)
+print(regr_Kerala.intercept_)
+S['Kerala'] = regr_Kerala.predict(Data_P[['Kerala_dt', 'Kerala_In']])
+
+X = Data[['Ladakh_dt', 'Ladakh_In']]
+Y = Data['Ladakh_dp']
+regr_Ladakh = linear_model.LinearRegression()
+regr_Ladakh.fit(X, Y)
+print(regr_Ladakh.coef_)
+print(regr_Ladakh.intercept_)
+S['Ladakh'] = regr_Ladakh.predict(Data_P[['Ladakh_dt', 'Ladakh_In']])
+
+X = Data[['Madhya Pradesh_dt', 'Madhya Pradesh_In']]
+Y = Data['Madhya Pradesh_dp']
+regr_MadhyaPradesh = linear_model.LinearRegression()
+regr_MadhyaPradesh.fit(X, Y)
+print(regr_MadhyaPradesh.coef_)
+print(regr_MadhyaPradesh.intercept_)
+S['Madhya Pradesh'] = regr_MadhyaPradesh.predict(Data_P[['Madhya Pradesh_dt', 'Madhya Pradesh_In']])
+
+X = Data[['Maharashtra_dt', 'Maharashtra_In']]
+Y = Data['Maharashtra_dp']
+regr_Maharashtra = linear_model.LinearRegression()
+regr_Maharashtra.fit(X, Y)
+print(regr_Maharashtra.coef_)
+print(regr_Maharashtra.intercept_)
+S['Maharashtra'] = regr_Maharashtra.predict(Data_P[['Maharashtra_dt', 'Maharashtra_In']])
+
+X = Data[['Manipur_dt', 'Manipur_In']]
+Y = Data['Manipur_dp']
+regr_Manipur = linear_model.LinearRegression()
+regr_Manipur.fit(X, Y)
+print(regr_Manipur.coef_)
+print(regr_Manipur.intercept_)
+S['Manipur'] = regr_Manipur.predict(Data_P[['Manipur_dt', 'Manipur_In']])
+
+X = Data[['Meghalaya_dt', 'Meghalaya_In']]
+Y = Data['Meghalaya_dp']
+regr_Meghalaya = linear_model.LinearRegression()
+regr_Meghalaya.fit(X, Y)
+print(regr_Meghalaya.coef_)
+print(regr_Meghalaya.intercept_)
+S['Meghalaya'] = regr_Meghalaya.predict(Data_P[['Meghalaya_dt', 'Meghalaya_In']])
+
+X = Data[['Mizoram_dt', 'Mizoram_In']]
+Y = Data['Mizoram_dp']
+regr_Mizoram = linear_model.LinearRegression()
+regr_Mizoram.fit(X, Y)
+print(regr_Mizoram.coef_)
+print(regr_Mizoram.intercept_)
+S['Mizoram'] = regr_Mizoram.predict(Data_P[['Mizoram_dt', 'Mizoram_In']])
+
+X = Data[['Nagaland_dt', 'Nagaland_In']]
+Y = Data['Nagaland_dp']
+regr_Nagaland = linear_model.LinearRegression()
+regr_Nagaland.fit(X, Y)
+print(regr_Nagaland.coef_)
+print(regr_Nagaland.intercept_)
+S['Nagaland'] = regr_Nagaland.predict(Data_P[['Nagaland_dt', 'Nagaland_In']])
+
+X = Data[['Odisha_dt', 'Odisha_In']]
+Y = Data['Odisha_dp']
+regr_Odisha = linear_model.LinearRegression()
+regr_Odisha.fit(X, Y)
+print(regr_Odisha.coef_)
+print(regr_Odisha.intercept_)
+S['Odisha'] = regr_Odisha.predict(Data_P[['Odisha_dt', 'Odisha_In']])
+
+X = Data[['Puducherry_dt', 'Puducherry_In']]
+Y = Data['Puducherry_dp']
+regr_Puducherry = linear_model.LinearRegression()
+regr_Puducherry.fit(X, Y)
+print(regr_Puducherry.coef_)
+print(regr_Puducherry.intercept_)
+S['Puducherry'] = regr_Puducherry.predict(Data_P[['Puducherry_dt', 'Puducherry_In']])
+
+X = Data[['Punjab_dt', 'Punjab_In']]
+Y = Data['Punjab_dp']
+regr_Punjab = linear_model.LinearRegression()
+regr_Punjab.fit(X, Y)
+print(regr_Punjab.coef_)
+print(regr_Punjab.intercept_)
+S['Punjab'] = regr_Punjab.predict(Data_P[['Punjab_dt', 'Punjab_In']])
+
+X = Data[['Rajasthan_dt', 'Rajasthan_In']]
+Y = Data['Rajasthan_dp']
+regr_Rajasthan = linear_model.LinearRegression()
+regr_Rajasthan.fit(X, Y)
+print(regr_Rajasthan.coef_)
+print(regr_Rajasthan.intercept_)
+S['Rajasthan'] = regr_Rajasthan.predict(Data_P[['Rajasthan_dt', 'Rajasthan_In']])
+
+X = Data[['Sikkim_dt', 'Sikkim_In']]
+Y = Data['Sikkim_dp']
+regr_Sikkim = linear_model.LinearRegression()
+regr_Sikkim.fit(X, Y)
+print(regr_Sikkim.coef_)
+print(regr_Sikkim.intercept_)
+S['Sikkim'] = regr_Sikkim.predict(Data_P[['Sikkim_dt', 'Sikkim_In']])
+
+X = Data[['Tamil Nadu_dt', 'Tamil Nadu_In']]
+Y = Data['Tamil Nadu_dp']
+regr_TamilNadu= linear_model.LinearRegression()
+regr_TamilNadu.fit(X, Y)
+print(regr_TamilNadu.coef_)
+print(regr_TamilNadu.intercept_)
+S['Tamil Nadu'] = regr_TamilNadu.predict(Data_P[['Tamil Nadu_dt', 'Tamil Nadu_In']])
+
+X = Data[['Telangana_dt', 'Telangana_In']]
+Y = Data['Telangana_dp']
+regr_Telangana = linear_model.LinearRegression()
+regr_Telangana.fit(X, Y)
+print(regr_Telangana.coef_)
+print(regr_Telangana.intercept_)
+S['Telangana'] = regr_Telangana.predict(Data_P[['Telangana_dt', 'Telangana_In']])
+
+
+X = Data[['Tripura_dt', 'Tripura_In']]
+Y = Data['Tripura_dp']
+regr_Tripura = linear_model.LinearRegression()
+regr_Tripura.fit(X, Y)
+print(regr_Tripura.coef_)
+print(regr_Tripura.intercept_)
+S['Tripura'] = regr_Tripura.predict(Data_P[['Tripura_dt', 'Tripura_In']])
+
+X = Data[['Uttar Pradesh_dt', 'Uttar Pradesh_In']]
+Y = Data['Uttar Pradesh_dp']
+regr_UttarPradesh = linear_model.LinearRegression()
+regr_UttarPradesh.fit(X, Y)
+print(regr_UttarPradesh.coef_)
+print(regr_UttarPradesh.intercept_)
+S['Uttar Pradesh'] = regr_UttarPradesh.predict(Data_P[['Uttar Pradesh_dt', 'Uttar Pradesh_In']])
+
+X = Data[['Uttarakhand_dt', 'Uttarakhand_In']]
+Y = Data['Uttarakhand_dp']
+regr_Uttarakhand = linear_model.LinearRegression()
+regr_Uttarakhand.fit(X, Y)
+print(regr_Uttarakhand.coef_)
+print(regr_Uttarakhand.intercept_)
+S['Uttarakhand'] = regr_Uttarakhand.predict(Data_P[['Uttarakhand_dt', 'Uttarakhand_In']])
+
+X = Data[['West Bengal_dt', 'West Bengal_In']]
+Y = Data['West Bengal_dp']
+regr_WestBengal = linear_model.LinearRegression()
+regr_WestBengal.fit(X, Y)
+print(regr_WestBengal.coef_)
+print(regr_WestBengal.intercept_)
+S['West Bengal'] = regr_WestBengal.predict(Data_P[['West Bengal_dt', 'West Bengal_In']])
+
+
+S.to_csv("Predictions_python.csv")
+#............................end..................................
+
+
